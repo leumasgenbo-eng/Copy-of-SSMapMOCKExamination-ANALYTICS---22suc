@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   schoolName: "UNITED BAYLOR ACADEMY",
   schoolAddress: "ACCRA DIGITAL CENTRE, GHANA",
   schoolNumber: "UBA-2025-001", 
-  schoolLogo: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6AMXDA0YOT8bkgAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmhuAAAAsklEQVR42u3XQQqAMAxE0X9P7n8pLhRBaS3idGbgvYVAKX0mSZI0SZIU47X2vPcZay1rrfV+S6XUt9ba9621pLXWfP9PkiRJkiRpqgB7/X/f53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le578HAAB//6B+n9VvAAAAAElFTkSuQmCC", 
+  schoolLogo: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6AMXDA0YOT8bkgAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmhuAAAAsklEQVR42u3XQQqAMAxE0X9P7n8pLhRBaS3idGbgvYVAKX0mSZI0SZIU47X2vPcZay1rrfV+S6XUt9ba9621pLXWfP9PkiRJkiRpqgB7/X/f53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le53le578HAAB//6B+n9VvAAAAAElFTkSuQmCC", 
   examTitle: "2ND MOCK 2025 BROAD SHEET EXAMINATION",
   termInfo: "TERM 2",
   academicYear: "2024/2025",
@@ -96,6 +96,7 @@ const App: React.FC = () => {
   // --- EXTERNAL HOST DATA SYNC PROTOCOL ---
   useEffect(() => {
     const handleHostMessage = (event: MessageEvent) => {
+      // Validate that this is a recognized SS-Map Sync Signal
       if (event.data && event.data.type === 'SSMAP_REMOTE_SYNC') {
         const { payload } = event.data;
         if (!payload) return;
@@ -103,24 +104,29 @@ const App: React.FC = () => {
         setIsHostConnected(true);
         setShowSyncOverlay(true);
 
+        // Sync Data Layers
         if (payload.settings) setSettings(prev => ({ ...prev, ...payload.settings }));
         if (payload.students) setStudents(payload.students);
         if (payload.facilitators) setFacilitators(payload.facilitators);
 
+        // Persistence Handshake
         setTimeout(() => {
           localStorage.setItem('uba_app_settings', JSON.stringify({ ...settings, ...payload.settings }));
           localStorage.setItem('uba_students', JSON.stringify(payload.students));
           localStorage.setItem('uba_facilitators', JSON.stringify(payload.facilitators));
           setShowSyncOverlay(false);
-          console.log("SS-MAP: Institutional Data Sync successful.");
+          console.log("SS-MAP: Institutional Data Sync from Host successful.");
         }, 1000);
       }
     };
 
     window.addEventListener('message', handleHostMessage);
+    
+    // Signal to parent that we are ready for data injection
     if (window.parent !== window) {
       window.parent.postMessage({ type: 'SSMAP_READY' }, '*');
     }
+
     return () => window.removeEventListener('message', handleHostMessage);
   }, [settings]);
 
@@ -158,9 +164,15 @@ const App: React.FC = () => {
     localStorage.setItem('uba_app_settings', JSON.stringify(settings));
     localStorage.setItem('uba_students', JSON.stringify(students));
     localStorage.setItem('uba_facilitators', JSON.stringify(facilitators));
+    
+    // Sync back to host web if connected
     if (window.parent !== window) {
-      window.parent.postMessage({ type: 'SSMAP_DATA_UPDATE', payload: { settings, students, facilitators } }, '*');
+      window.parent.postMessage({ 
+        type: 'SSMAP_DATA_UPDATE', 
+        payload: { settings, students, facilitators } 
+      }, '*');
     }
+
     if (settings.schoolNumber) {
       const registry: SchoolRegistryEntry[] = JSON.parse(localStorage.getItem('uba_global_registry') || '[]');
       const entryIdx = registry.findIndex(r => r.id === settings.schoolNumber);
@@ -184,26 +196,38 @@ const App: React.FC = () => {
   };
 
   const handleExitToDrive = () => {
-    // Escaping the iframe to return to the parent drive instance
-    const driveUrl = 'https://ai.studio/apps/drive/1ID0a3hB9Qqk3GT9CZ40SahODX0tsLeGH';
-    // Using window.open with '_top' to ensure the parent frame navigates
-    try {
-      window.open(driveUrl, '_top');
-    } catch (e) {
-      window.location.href = driveUrl;
+    const driveUrl = 'https://ai.studio/apps/drive/12_hFsiSfEl86pBuqsuoH-RBtgvymEJ-p';
+    if (window.confirm("Return to AI Studio Drive? Unsaved changes may be lost.")) {
+      try {
+        // Attempt aggressive top-level redirect for iframe breakout
+        window.top!.location.href = driveUrl;
+      } catch (e) {
+        // Fallback for sandboxed or strict cross-origin environments
+        window.location.href = driveUrl;
+        window.open(driveUrl, '_top');
+      }
     }
   };
 
   const isLandscapeView = viewMode === 'master' || viewMode === 'series';
 
+  // Fix: Removed early return for 'hq' viewMode.
+  // When an early return is present, TypeScript narrows the type of 'viewMode' in the remaining code.
+  // This narrowing excluded 'hq' from the possible values of 'viewMode', causing errors on line 261 
+  // where 'viewMode === hq' was checked for conditional button styling.
+  // The 'hq' view is now handled as an overlay/exclusive section within the main return.
+
   return (
     <div className={`min-h-screen bg-gray-100 font-sans flex flex-col ${isLandscapeView ? 'print-landscape' : 'print-portrait'}`}>
+      
+      {/* Network HQ Overlay View */}
       {viewMode === 'hq' && (
         <div className="fixed inset-0 z-[100] bg-slate-950 overflow-auto no-print">
           <SuperAdminPortal onExit={() => setViewMode('management')} onRemoteView={handleRemoteView} />
         </div>
       )}
 
+      {/* Synchronization Overlay */}
       {showSyncOverlay && (
         <div className="fixed inset-0 z-[1000] bg-blue-900/80 backdrop-blur-md flex flex-col items-center justify-center text-white space-y-4">
            <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
@@ -218,8 +242,10 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* SEGREGATED NAVIGATION: ADMIN vs SUPERADMIN */}
       <div className="no-print bg-blue-950 text-white p-3 sticky top-0 z-50 shadow-2xl flex flex-wrap justify-between items-center gap-4">
         <div className="flex flex-wrap items-center gap-6">
+          {/* Institutional Admin Segment */}
           <div className="flex flex-col gap-1">
              <div className="flex items-center justify-between px-1">
                 <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Academy Admin Hub</span>
@@ -235,10 +261,14 @@ const App: React.FC = () => {
                <button onClick={() => setViewMode('reports')} className={`px-4 py-1.5 rounded-lg transition-all ${viewMode === 'reports' ? 'bg-white text-blue-900 font-black shadow-lg' : 'text-blue-200 hover:text-white'}`}>Pupil Reports</button>
              </div>
           </div>
+
           <div className="h-8 w-px bg-white/10 hidden md:block"></div>
+
+          {/* Network HQ Segment */}
           <div className="flex flex-col gap-1">
              <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest ml-1">Network Oversight</span>
              <div className="flex bg-slate-900 rounded-xl p-1 text-[10px] md:text-xs border border-white/5">
+               {/* Fix: Comparison now works because viewMode type is not narrowed to exclude 'hq' */}
                <button onClick={() => setViewMode('hq')} className={`px-5 py-1.5 rounded-lg transition-all flex items-center gap-2 ${viewMode === 'hq' ? 'bg-indigo-600 text-white font-black shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                   <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
                   Global HQ Portal
@@ -246,6 +276,7 @@ const App: React.FC = () => {
              </div>
           </div>
         </div>
+
         <div className="flex gap-2">
            {!isRemoteViewing && <button onClick={() => { handleSave(); alert("Institutional records synchronized with network."); }} className="bg-yellow-500 hover:bg-yellow-600 text-blue-950 px-5 py-2 rounded-xl font-black shadow-xl transition-all active:scale-95 text-[10px] uppercase tracking-widest">Sync Registry</button>}
            <button onClick={() => window.print()} className="bg-white/10 hover:bg-white/20 text-white px-5 py-2 rounded-xl font-black shadow transition-all text-[10px] uppercase tracking-widest border border-white/10">Print View</button>
