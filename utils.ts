@@ -257,8 +257,8 @@ export const generateFullDemoSuite = (): {
   ];
 
   const registryEntry: SchoolRegistryEntry = {
-    id: "SSMAP-2025-001",
-    name: "CULBURY ACADEMY",
+    id: "UBA-2025-001",
+    name: "UNITED BAYLOR ACADEMY",
     registrant: "ADMINISTRATOR",
     accessCode: "SSMAP-HQ-SECURE",
     enrollmentDate: "2025-01-01",
